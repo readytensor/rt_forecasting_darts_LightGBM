@@ -72,7 +72,6 @@ class Forecaster:
                 Number of lagged past_covariates values used to predict the next time step. If an integer is given the last lags_past_covariates past lags are used (inclusive, starting from lag -1).
                 Otherwise a list of integers with lags < 0 is required.
 
-
             lags_future_covariates (Union[Tuple[int, int], List[int], None]):
                 Number of lagged future_covariates values used to predict the next time step. If an tuple (past, future) is given the last past lags in the past are used
                 (inclusive, starting from lag -1) along with the first future future lags (starting from 0 - the prediction time - up to future - 1 included).
@@ -127,18 +126,18 @@ class Forecaster:
             lags = self.data_schema.forecast_length * lags_forecast_ratio
             self.lags = lags
 
-            if self.data_schema.past_covariates and not self.lags_past_covariates:
+            if use_exogenous and self.data_schema.past_covariates:
                 self.lags_past_covariates = lags
 
-            if data_schema.future_covariates or data_schema.time_col_dtype in [
-                "DATE",
-                "DATETIME",
-            ]:
-                if not self.lags_future_covariates:
-                    self.lags_future_covariates = (
-                        lags,
-                        self.data_schema.forecast_length,
-                    )
+        if (
+            use_exogenous
+            and not lags_future_covariates
+            and (
+                self.data_schema.future_covariates
+                or self.data_schema.time_col_dtype in ["DATE", "DATETIME"]
+            )
+        ):
+            self.lags_future_covariates = list(range(0, data_schema.forecast_length))
 
         if not self.use_exogenous:
             self.lags_past_covariates = None
@@ -157,7 +156,7 @@ class Forecaster:
             use_static_covariates=use_static_covariates,
             random_state=self.random_state,
             multi_models=self.multi_models,
-            # verbose=-1,
+            verbose=-1,
             **kwargs,
         )
 
@@ -165,6 +164,7 @@ class Forecaster:
         self,
         history: pd.DataFrame,
         data_schema: ForecastingSchema,
+        history_length: int = None,
         test_dataframe: pd.DataFrame = None,
     ) -> pd.DataFrame:
         """
@@ -209,7 +209,7 @@ class Forecaster:
         self.all_ids = all_ids
         scalers = {}
         for index, s in enumerate(all_series):
-            if self.history_length:
+            if history_length:
                 s = s.iloc[-self.history_length :]
             s.reset_index(inplace=True)
 
@@ -220,8 +220,18 @@ class Forecaster:
             )
 
             scalers[index] = scaler
+            static_covariates = None
+            if self.use_exogenous and self.data_schema.static_covariates:
+                static_covariates = s[self.data_schema.static_covariates]
 
-            target = TimeSeries.from_dataframe(s, value_cols=data_schema.target)
+            target = TimeSeries.from_dataframe(
+                s,
+                value_cols=data_schema.target,
+                static_covariates=static_covariates.iloc[0]
+                if static_covariates is not None
+                else None,
+            )
+
             targets.append(target)
 
             if data_schema.past_covariates:
@@ -246,7 +256,7 @@ class Forecaster:
             ]
 
             for train_series, test_series in zip(all_series, test_all_series):
-                if self.history_length:
+                if history_length:
                     train_series = train_series.iloc[-self.history_length :]
 
                 train_future_covariates = train_series[future_covariates_names]
@@ -275,6 +285,7 @@ class Forecaster:
             past = None
         if not future:
             future = None
+
         return targets, past, future
 
     def fit(
