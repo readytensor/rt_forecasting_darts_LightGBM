@@ -36,7 +36,7 @@ class Forecaster:
             Tuple[int, int],
             List[int],
             None,
-        ] = (10, 10),
+        ] = None,
         output_chunk_length: int = None,
         likelihood: Optional[str] = None,
         quantiles: Optional[List] = None,
