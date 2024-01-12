@@ -40,7 +40,7 @@ class Forecaster:
         output_chunk_length: int = None,
         likelihood: Optional[str] = None,
         quantiles: Optional[List] = None,
-        multi_models: Optional[bool] = True,
+        multi_models: Optional[bool] = False,
         use_static_covariates: bool = True,
         use_exogenous: bool = True,
         random_state: Optional[int] = 0,
@@ -156,7 +156,6 @@ class Forecaster:
             use_static_covariates=use_static_covariates,
             random_state=self.random_state,
             multi_models=self.multi_models,
-            verbose=-1,
             **kwargs,
         )
 
